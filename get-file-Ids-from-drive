@@ -1,0 +1,24 @@
+function getFileIdsFromDrive() {
+  const folderId = '';
+
+  const folder = DriveApp.getFolderById(folderId);
+  const files = folder.getFiles();
+
+  const sheet = SpreadsheetApp.openById('your spreadsheet id').getSheetByName('your sheet name');
+
+  var row = 2;
+  while (files.hasNext()){
+    const file = files.next();
+    const fileId = file.getId();
+    const fileName = file.getName();
+
+    const existingFileIds = sheet.getRange(2, 1, sheet.getLastRow() - 1).getValues().flat();
+
+    if (!existingFileIds.includes(fileId)) {
+      sheet.getRange(row, 1).setValue(fileId);
+      sheet.getRange(row, 11).setValue(fileName);
+      row++;
+    }
+  }
+}
+
