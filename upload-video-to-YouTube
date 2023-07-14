@@ -1,0 +1,81 @@
+function uploadVideoToYoutube() {
+  const sheet = SpreadsheetApp.openById('your spreadsheet id').getSheetByName('your spreadsheet name');
+  const data = sheet.getDataRange().getValues();
+  
+  let postedAll = true;
+  let postedVideo = false;
+
+  const uploadedStatuses = sheet.getRange(2, 10, sheet.getLastRow() - 1).getValues().flat();
+
+  for (var i = 1; i < data.length; i++){
+    const fileId = data[i][0];
+    const file = DriveApp.getFileById(fileId);
+    const people = data[i][1]; 
+    const title = data[i][2]
+    const quote1 = data[i][3];
+    const quote2 = data[i][4];
+    const quote3 = data[i][5];
+    const glasp_profile = data[i][6];
+    const tag = data[i][7];
+    const status = data[i][8];
+    
+    if (uploadedStatuses[i - 1] == "Posted"){
+      continue;
+    }
+    
+    const categoryId = '22';
+    
+    const blob = file.getBlob();
+    const modified_title = title + ' ' + people + ' ' + tag;
+    
+    const description = 
+      (quote1 ? quote1 + '\n\n': '') + 
+      (quote2 ? quote2 + '\n\n': '') + 
+      (quote3 ? quote3 + '\n\n': '') + 
+      (glasp_profile ? glasp_profile: '')
+    
+    if (!quote1 || !quote3) {
+      Logger.log('Skipping video upload for Row ' + (i + 1) + ' due to empty Quote1 or Quote3');
+      continue;
+    }
+    
+    const videoResource = {
+      snippet: {
+        title: modified_title,
+        description: description,
+        categoryId: categoryId
+      },
+      status: {
+        privacyStatus: 'public'
+      }
+    };
+
+    try {
+      const response = YouTube.Videos.insert(videoResource, 'snippet,status', blob);
+      if (response && response.id) {
+        sheet.getRange(i+1, 10).setValue('Posted');
+        const postedDateTime = new Date();
+        sheet.getRange(i+1,9).setValue(postedDateTime);
+        postedVideo = true;
+        Logger.log('Uploaded video with File ID: ' + fileId);
+        break;
+      }
+    } catch (error) {
+      Logger.log('Error uploading video: ' + error);
+      postedAll = false;
+    }
+  }
+
+  if (postedAll){
+    Logger.log("No content to post");
+  } else {
+    if (postedVideo){
+      Logger.log("Video uploaded successfully")
+    } else {
+      Logger.log("Some videos failed to upload");
+    }
+  }
+}
+
+
+
