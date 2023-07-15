@@ -1,0 +1,203 @@
+!pip install moviepy
+!pip install ffmpeg-python
+!apt-get install -y imagemagick
+!pip install opencv-python-headless
+!pip install pillow
+!apt-get install -y fonts-freefont-ttf
+!pip install gspread gspread_dataframe
+!pip install gdown
+!pip install pydub
+!pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+import moviepy.config
+
+moviepy.config.change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
+
+from moviepy.editor import concatenate_videoclips, VideoFileClip
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+import cv2
+import numpy as np
+import textwrap
+from PIL import ImageFont, ImageDraw, Image
+import matplotlib.pyplot as plt
+import datetime
+
+fontpath = "/usr/share/fonts/truetype/freefont/FreeMono.ttf"
+font = ImageFont.truetype(fontpath, 30)
+
+import gspread
+from gspread_dataframe import get_as_dataframe
+from oauth2client.service_account import ServiceAccountCredentials
+from ast import Num
+import pandas as pd
+from pydub import AudioSegment
+import random
+from googleapiclient.discovery import build
+
+from google.colab import auth
+auth.authenticate_user()
+
+from google.auth import default
+
+creds,_=default()
+
+gc = gspread.authorize(creds)
+
+worksheet = gc.open_by_key('1e_3MvXLtcQz0QtT4vOjW-__uN6ReKDU9CVKvW76KjAE')
+st = worksheet.worksheet("GCol")
+audio_st = worksheet.worksheet('Music')
+
+
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+from google.colab import files
+import zipfile
+import gdown
+import os
+import shutil
+
+url = 'https://drive.google.com/uc?id=1dtye20AesLIC5Jo2kfv4Wv9G_N-6nORr'
+output = 'output.mp3'
+gdown.download(url, output, quiet=False)
+audio_path = 'output.mp3'
+audio_clip = AudioFileClip(audio_path)
+
+
+df = pd.DataFrame(st.get_all_records())
+df_audio = pd.DataFrame(audio_st.get_all_records())
+
+tmp_folder = "/content/tmp"
+output_folder = "/content/output"
+if not os.path.exists(tmp_folder):
+    os.makedirs(tmp_folder)
+
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+
+
+video_count = 0
+
+texts = []
+
+if 'Created' not in df.columns:
+    print("Error: 'Created' column does not exist in the spreadsheet.")
+    exit()
+
+audio_sheet = worksheet.worksheet("Music")
+audio_data = audio_sheet.get_all_records()
+
+for index, row in df.iterrows():
+  if video_count >= 10:
+    break
+
+  author = row['Author']
+  quote1 = row['Quote1']
+  quote2 = row['Quote2']
+  quote3 = row['Quote3']
+
+  if row['Status'] == 'Created':
+    continue
+
+  font_path = "/content/PTSans-Bold.ttf"
+  font_size = 60
+  max_width = 28
+
+  intro = f'3 Quotes from {author}'
+  texts = [(intro, 0, 1.5), (quote1, 2, 7.5), (quote2, 8, 13.5), (quote3, 14, 19.5)]
+
+
+  def draw_text(text, font_path, font_size, max_width):
+    original_font_size = font_size
+    max_lines = 7
+
+    def calculate_font_size(draw, text, font_path, font_size, max_width, max_lines):
+      font = ImageFont.truetype(font_path, font_size)
+      wrapped_text = textwrap.fill(text, width=max_width)
+      wrapped_text_lines = wrapped_text.split("\n")
+      line_height = font.getsize(wrapped_text_lines[0])[1]
+      num_lines = len(wrapped_text_lines)
+
+      if len(wrapped_text_lines) > max_lines:
+        return None, None
+
+      return font, len(wrapped_text_lines)
+
+    def draw_on_image(image):
+      image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+      draw = ImageDraw.Draw(image_pil)
+
+      font, num_lines = calculate_font_size(draw, text, font_path, font_size, max_width, max_lines = 5)
+      if font is None:
+        font = ImageFont.truetype(font_path, 45)
+
+      wrapped_text = textwrap.fill(text, width = max_width)
+      wrapped_text_lines = wrapped_text.split("\n")
+      line_height = font.getsize(wrapped_text_lines[0])[1]
+
+      text_height = len(wrapped_text_lines) * line_height
+      if num_lines is None:
+        position_y = (image_pil.height * 3 / 14) - (text_height / 5)
+      else:
+        position_y = (image_pil.height * 3 / 10) - (text_height / 5)
+
+      text_width, text_height = draw.textsize(wrapped_text, font = font)
+      position = ((image_pil.width - text_width) / 2, position_y)
+
+      for line in wrapped_text_lines:
+        text_width, text_height = draw.textsize(line, font=font)
+        position_x = (image_pil.width - text_width) / 2
+        position_y += line_height
+        draw.text((position_x, position_y), line, font=font, fill=(255, 255, 255, 255), align="center")
+
+      return cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+
+    return draw_on_image
+
+  video = row['Video']
+  video_path = f"/content/drive/My Drive/Videos/Original/{video}"
+  original_clip = VideoFileClip(video_path).subclip(0, 19.5)
+
+  clips = [original_clip.subclip(start, end).fl_image(draw_text(text, font_path, font_size, max_width)) for text, start, end, *_ in texts]
+
+  final_clip = concatenate_videoclips([original_clip.subclip(0, texts[0][1])] + clips + [original_clip.subclip(texts[-1][2], original_clip.duration)])
+
+  duration = final_clip.duration
+  if audio_clip.duration < duration:
+    audio_clip = audio_clip.loop(duration=duration)
+  elif audio_clip.duration > duration:
+    audio_clip = audio_clip.subclip(0,duration)
+
+  final_clip = final_clip.set_audio(audio_clip)
+  #output_path = 'output_with_music.mp4'
+
+  current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+  output_path = f"{author}_{current_time}.mp4"
+
+  final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+  tmp_file = os.path.join(tmp_folder, output_path)
+  os.rename(output_path, tmp_file)
+
+  st.update(f'F{index + 2}', "Created")
+  st.update(f'L{index + 2}', output_path)
+  video_count += 1
+
+
+zip_filename = "output_videos.zip"
+zip_path = os.path.join(output_folder, zip_filename)
+
+with zipfile.ZipFile(zip_filename, "w") as zipf:
+    for file in os.listdir(tmp_folder):
+        zipf.write(os.path.join(tmp_folder, file), file)
+
+print("ZIP file created.")
+
+shutil.rmtree(tmp_folder)
+
+print("ZIP file location:")
+print(zip_path)
+
+from google.colab import files
+files.download("output_videos.zip")
