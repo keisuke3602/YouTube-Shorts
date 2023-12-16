@@ -1,9 +1,3 @@
-"""
-pip install moviepy
-pip install ffmpeg-python
-pip install --upgrade google-cloud-texttospeech
-"""
-
 import glob
 import gspread
 import datetime
@@ -47,7 +41,7 @@ def count_creatable_video():
     scope = ["https://spreadsheets.google.com/feeds",
                 "https://www.googleapis.com/auth/spreadsheets",
                 "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name('/Users/keisukewatanabe/Desktop/Shorts/keys/YouTube_text_to_speech_speedy-anthem-340212-e4195f19e826.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('/Users/keisukewatanabe/Documents/GitHub/YouTube/.keys/YouTube_text_to_speech_speedy-anthem-340212-e4195f19e826.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key("1e_3MvXLtcQz0QtT4vOjW-__uN6ReKDU9CVKvW76KjAE").worksheet("GCol")
     df = get_data_as_dataframe(sheet)
@@ -69,11 +63,11 @@ def create_video(num_videos):
         scope = ["https://spreadsheets.google.com/feeds",
                 "https://www.googleapis.com/auth/spreadsheets",
                 "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('/Users/keisukewatanabe/Desktop/Shorts/keys/YouTube_text_to_speech_speedy-anthem-340212-e4195f19e826.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('/Users/keisukewatanabe/Documents/GitHub/YouTube/.keys/YouTube_text_to_speech_speedy-anthem-340212-e4195f19e826.json', scope)
         client = gspread.authorize(creds)
         sheet = client.open_by_key("1e_3MvXLtcQz0QtT4vOjW-__uN6ReKDU9CVKvW76KjAE").worksheet("GCol")
         df = get_data_as_dataframe(sheet)
-        bgm = AudioFileClip('/Users/keisukewatanabe/Desktop/Shorts/music/Kevin_MacLeod_-_Canon_in_D_Major.mp3')
+        bgm = AudioFileClip('/Users/keisukewatanabe/Documents/GitHub/YouTube/Assets/music/Kevin_MacLeod_-_Canon_in_D_Major.mp3')
         creatable_videos = count_creatable_video()
 
         if num_videos > creatable_videos:
@@ -96,11 +90,18 @@ def create_video(num_videos):
                 quote2 = row['Quote2']
                 quote3 = row['Quote3']
 
+                quotes = [quote1, quote2, quote3]
+                quotes = sorted(quotes, key=len)
+
+                quote1 = quotes[0]
+                quote2 = quotes[1]
+                quote3 = quotes[2]
+
                 if not quote1 or not quote3:
                     print(f"Row: {index}, Quote1 or Quote3 is empty. Skipping this row.")
                     continue
 
-                if len(quote1) > 250 or len(quote2) > 250 or len(quote3) > 250:
+                if len(quote1) > 220 or len(quote2) > 220 or len(quote3) > 220:
                     print(f"Row: {index}, Author: {author_name} has a quote longer than 300 characters. Skipping...")
                     df.at[index-2, 'Status'] = 'Skipped'
                     continue
@@ -114,7 +115,7 @@ def create_video(num_videos):
                 clips = []
                 start_time = 0
 
-                key_path = "/Users/keisukewatanabe/Desktop/Shorts/keys/YouTube_text_to_speech_speedy-anthem-340212-e4195f19e826.json"
+                key_path = '/Users/keisukewatanabe/Documents/GitHub/YouTube/.keys/YouTube_text_to_speech_speedy-anthem-340212-e4195f19e826.json'
                 client = texttospeech.TextToSpeechClient.from_service_account_json(key_path)
 
                 file_path = 'input/' + expected_filename
@@ -138,18 +139,16 @@ def create_video(num_videos):
                     if fontsize == 58:
                         wrap_length = 24
                     elif fontsize == 52:
-                        wrap_length = 24
+                        wrap_length = 22
                     else:
-                        wrap_length = 28
+                        wrap_length = 26
 
                     text = textwrap.fill(text, wrap_length)
 
                     temp_txt_clip = TextClip(text, fontsize=fontsize, color='white')
                     txt_height = temp_txt_clip.size[1]
-                    print("txt_height: " + str(txt_height))
 
                     half_txt_space = ((1920 - img_height) / 2)
-                    print("half_txt_space:" + str(half_txt_space))
 
                     position_x = ("center")
                     position_y = ((1920 - img_height) / 2) - (txt_height / 3)
@@ -184,6 +183,8 @@ def create_video(num_videos):
                     os.remove(speech_file)
 
                     duration = audio.duration
+                    if i == 2:
+                        duration += 0.8
 
                     txt_clip = TextClip(text, fontsize = fontsize, color='white')
                     txt_clip = txt_clip.set_duration(duration).set_start(start_time)
@@ -212,8 +213,7 @@ def create_video(num_videos):
                 
                 output_directory = "output"
                 current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                author_name_sanitized = author_name.replace(" ", "_")
-                output_filename = os.path.join(output_directory, f"{author_name_sanitized}_{current_time}.mp4")
+                output_filename = os.path.join(output_directory, f"{author_name}_{current_time}.mp4")
                 concat_clip.write_videofile(output_filename, fps=24, codec='libx264', audio_codec='aac', audio_bitrate="320k") #,write_logfile=True)
 
                 file_name_only = os.path.basename(output_filename)
